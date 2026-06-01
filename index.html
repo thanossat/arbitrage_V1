@@ -183,6 +183,7 @@
 
 <div class="content">
 
+  <!-- SETUP -->
   <div class="card">
     <div class="card-title">Setup</div>
     <div class="field-row">
@@ -209,6 +210,7 @@
     </div>
   </div>
 
+  <!-- LEGS -->
   <div class="card">
     <div class="card-title">Αποτελέσματα & αποδόσεις</div>
     <div class="legs-header">
@@ -219,6 +221,7 @@
     <div id="klToggles"></div>
   </div>
 
+  <!-- METRICS -->
   <div id="metricsArea" style="display:none">
     <div class="metrics" id="metricsGrid"></div>
     <div id="statusBadge"></div>
@@ -228,17 +231,22 @@
       <p class="footnote" id="footnote"></p>
     </div>
 
+    <!-- ACTION BUTTONS -->
     <div class="action-bar">
       <button class="btn btn-green" id="btnRecord">✓ Καταχώρηση αποτελέσματος</button>
       <button class="btn btn-amber" id="btnMovement">↕ Κατάθεση / Ανάληψη</button>
     </div>
   </div>
 
+  <!-- Movement button always visible -->
   <div id="movAlways">
     <button class="btn btn-amber btn-full" id="btnMovementAlways" style="width:100%;margin-top:4px">↕ Κατάθεση / Ανάληψη</button>
   </div>
 
-</div><div class="modal-overlay" id="modalRecord">
+</div><!-- /content -->
+
+<!-- ── MODAL: Καταχώρηση αποτελέσματος ── -->
+<div class="modal-overlay" id="modalRecord">
   <div class="modal">
     <div class="modal-title">
       ✓ Καταχώρηση αποτελέσματος
@@ -264,6 +272,7 @@
   </div>
 </div>
 
+<!-- ── MODAL: Κατάθεση / Ανάληψη ── -->
 <div class="modal-overlay" id="modalMovement">
   <div class="modal">
     <div class="modal-title">
@@ -286,4 +295,306 @@
       <input type="text" id="movNote" placeholder="π.χ. Μηνιαία ανανέωση">
     </div>
 
-    <button
+    <button class="submit-btn amber" id="btnSubmitMovement">Αποθήκευση στο Sheet</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyG63um53dMtPIjTm0_-h1x35OxoQjIu_jLkgHWTeDqoNrnh4pWHlLnAk2JjDBFmDD8Vw/exec";
+
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); if (tg.colorScheme==='light') document.body.classList.add('tg-light'); }
+
+// ── State ──
+const D3 = [{label:'Home (H)',book:'Stoiximan',odds:'2.10',kl:false},{label:'Draw (X)',book:'Novibet',odds:'3.40',kl:false},{label:'Away (A)',book:'Betsson',odds:'3.60',kl:false}];
+const D2 = [{label:'Home',book:'Stoiximan',odds:'1.90',kl:false},{label:'Away',book:'Novibet',odds:'2.05',kl:false}];
+let legs = JSON.parse(JSON.stringify(D3));
+let lastCalc = null;
+let selectedWinner = null;
+let movType = 'dep';
+
+const getTotal   = () => parseFloat(document.getElementById('totalStake').value)||0;
+const getLossPct = () => (parseFloat(document.getElementById('lossPercent').value)||20)/100;
+const parseOdds  = s  => parseFloat((s||'').replace(',','.'))||0;
+const klStake    = (odds,total,lp) => (total*(1-lp))/odds;
+
+// ── Build UI ──
+function buildUI() {
+  const container = document.getElementById('legsContainer');
+  const klDiv     = document.getElementById('klToggles');
+  container.innerHTML = ''; klDiv.innerHTML = '';
+  const total = getTotal(), lp = getLossPct();
+  document.querySelectorAll('.kl-pct').forEach(el=>el.textContent=Math.round(lp*100));
+
+  legs.forEach((leg, i) => {
+    const row = document.createElement('div');
+    row.className = 'leg-row-wrap'; row.dataset.i = i;
+
+    const left = document.createElement('div'); left.className = 'leg-left';
+    const inLabel = makeInput('text', leg.label, 'label', i, '13px');
+    inLabel.placeholder = 'Αποτέλεσμα';
+    const inBook  = makeInput('text', leg.book,  'book',  i, '12px');
+    inBook.placeholder = 'Bookmaker'; inBook.style.color = 'var(--text2)';
+    left.append(inLabel, inBook);
+
+    const inOdds = makeInput('text', leg.odds, 'odds', i, '15px');
+    inOdds.className = 'leg-odds'; inOdds.inputMode = 'decimal';
+
+    const stakeCell = document.createElement('div');
+    stakeCell.className = 'leg-stake'; stakeCell.dataset.stakeDisplay = i;
+
+    row.append(left, inOdds, stakeCell);
+    container.appendChild(row);
+
+    const klRow = document.createElement('div');
+    klRow.className = 'kl-toggle-row';
+    klRow.innerHTML = `
+      <div>
+        <div class="kl-label">${leg.label}</div>
+        <div class="kl-sub">εν γνώσει -<span class="kl-pct">${Math.round(lp*100)}</span>% αν κερδίσει</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="kl-stake-disp" data-kl-stake="${i}" style="display:none"></span>
+        <label class="toggle-switch">
+          <input type="checkbox" data-kl="${i}" ${leg.kl?'checked':''}>
+          <span class="toggle-track"></span>
+        </label>
+      </div>`;
+    klDiv.appendChild(klRow);
+  });
+  updateStakes();
+}
+
+function makeInput(type, value, field, i, fontSize) {
+  const el = document.createElement('input');
+  el.type = type; el.value = value;
+  el.style.cssText = `width:100%;font-size:${fontSize};background:var(--bg3);border:0.5px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;outline:none`;
+  el.dataset.field = field; el.dataset.i = i;
+  return el;
+}
+
+function updateStakes() {
+  const total = getTotal(), lp = getLossPct();
+  const oddsArr    = legs.map(l=>parseOdds(l.odds));
+  const impliedArr = oddsArr.map(o=>o>1?1/o:0);
+  const fixedArr   = legs.map((l,i)=>l.kl&&oddsArr[i]>1?klStake(oddsArr[i],total,lp):null);
+  const fixedSum   = fixedArr.reduce((a,v)=>a+(v!==null?v:0),0);
+  const freeImpl   = impliedArr.reduce((a,v,i)=>a+(fixedArr[i]===null?v:0),0);
+  const freeTotal  = Math.max(0,total-fixedSum);
+  const stakesArr  = fixedArr.map((v,i)=>v!==null?v:(freeImpl>0?(impliedArr[i]/freeImpl)*freeTotal:0));
+
+  legs.forEach((leg,i)=>{
+    const cell = document.querySelector(`[data-stake-display="${i}"]`);
+    const klSp = document.querySelector(`[data-kl-stake="${i}"]`);
+    if (!cell) return;
+    if (leg.kl && fixedArr[i]!==null) {
+      cell.style.color='var(--amber)'; cell.textContent='€'+fixedArr[i].toFixed(2);
+      if(klSp){klSp.textContent='€'+fixedArr[i].toFixed(2);klSp.style.display='';}
+    } else {
+      cell.style.color='var(--text2)';
+      cell.textContent=oddsArr.every(o=>o>1)?'€'+stakesArr[i].toFixed(2):'auto';
+      if(klSp) klSp.style.display='none';
+    }
+  });
+  document.querySelectorAll('.kl-pct').forEach(el=>el.textContent=Math.round(lp*100));
+  calcResults(oddsArr,impliedArr,fixedArr,stakesArr,total,lp);
+}
+
+function calcResults(oddsArr,impliedArr,fixedArr,stakesArr,total,lp) {
+  const area = document.getElementById('metricsArea');
+  const movAlways = document.getElementById('movAlways');
+  if (!oddsArr.every(o=>o>1)||total<=0) {
+    area.style.display='none'; movAlways.style.display='block'; return;
+  }
+  const sumImpl   = impliedArr.reduce((a,b)=>a+b,0);
+  const totalSt   = stakesArr.reduce((a,b)=>a+b,0);
+  const returnsArr= stakesArr.map((s,i)=>s*oddsArr[i]);
+  const netArr    = returnsArr.map(r=>r-totalSt);
+  const minNet    = Math.min(...netArr), maxNet=Math.max(...netArr);
+  const isArb     = minNet>-0.01;
+  const klCount   = legs.filter(l=>l.kl).length;
+
+  lastCalc = {oddsArr,impliedArr,fixedArr,stakesArr,netArr,totalSt,returnsArr,sumImpl,total,lp,isArb,klCount};
+
+  area.style.display=''; movAlways.style.display='none';
+
+  document.getElementById('metricsGrid').innerHTML=`
+    <div class="metric-card"><div class="mlabel">Implied συνολικά</div><div class="mvalue" style="font-size:20px">${(sumImpl*100).toFixed(2)}%</div></div>
+    <div class="metric-card"><div class="mlabel">Margin book</div><div class="mvalue" style="font-size:20px">${((sumImpl-1)*100).toFixed(2)}%</div></div>
+    <div class="metric-card ${maxNet>=-0.01?'green':'red'}"><div class="mlabel">Καλύτερο</div><div class="mvalue">${maxNet>=0?'+':''}€${maxNet.toFixed(2)}</div></div>
+    <div class="metric-card ${minNet>=-0.01?'green':klCount>0?'amber':'red'}"><div class="mlabel">Χειρότερο</div><div class="mvalue">${minNet>=0?'+':''}€${minNet.toFixed(2)}</div></div>`;
+
+  const badge=document.getElementById('statusBadge');
+  badge.innerHTML=isArb
+    ?'<div class="status-badge arb">✓ Arb — κέρδος εγγυημένο</div>'
+    :klCount>0
+    ?`<div class="status-badge partial">⚡ Ελεγχόμενη έκθεση — ${klCount} σημείο${klCount>1?'α':''} εν γνώσει</div>`
+    :'<div class="status-badge noarb">✕ Χωρίς arb</div>';
+
+  let html=`<thead><tr><th>Αποτέλεσμα</th><th>Book</th><th>Απόδ.</th><th>Ποντ.</th><th>Net P/L</th><th>Τύπος</th></tr></thead><tbody>`;
+  legs.forEach((leg,i)=>{
+    const net=netArr[i], isKL=leg.kl;
+    const nc=isKL?'net-warn':net>=-0.01?'net-pos':'net-neg';
+    const pill=isKL?`<span class="type-pill type-kl">-${Math.round(lp*100)}%</span>`:`<span class="type-pill type-auto">auto</span>`;
+    html+=`<tr><td><div style="font-weight:500">${leg.label}</div></td><td style="color:var(--text2)">${leg.book||'—'}</td><td style="font-weight:600">${oddsArr[i].toFixed(2)}</td><td style="font-weight:600">€${stakesArr[i].toFixed(2)}</td><td class="${nc}">${net>=0?'+':''}€${net.toFixed(2)}</td><td>${pill}</td></tr>`;
+  });
+  document.getElementById('resultsTable').innerHTML=html+'</tbody>';
+
+  const books=[...new Set(legs.map(l=>l.book).filter(Boolean))];
+  document.getElementById('footnote').textContent=isArb
+    ?(books.length>=2?`Multi-book dutch μεταξύ ${books.join(', ')}.`:'Προσοχή: ίδιο book παντού.')
+    :klCount>0?`Σημεία "εν γνώσει" → ζημιά ακριβώς -${Math.round(lp*100)}% (€${(total*lp).toFixed(2)}) αν κερδίσουν.`
+    :'Δεν υπάρχει arb.';
+}
+
+// ── Events: inputs ──
+document.getElementById('legsContainer').addEventListener('input',e=>{
+  const el=e.target, i=parseInt(el.dataset.i), f=el.dataset.field;
+  if(f!==undefined) legs[i][f]=el.value;
+  updateStakes();
+});
+document.getElementById('klToggles').addEventListener('change',e=>{
+  const el=e.target, i=parseInt(el.dataset.kl);
+  if(!isNaN(i)){legs[i].kl=el.checked; updateStakes();}
+});
+document.getElementById('market').addEventListener('change',()=>{
+  legs=JSON.parse(JSON.stringify(document.getElementById('market').value==='2'?D2:D3));
+  buildUI();
+});
+document.getElementById('totalStake').addEventListener('input',updateStakes);
+document.getElementById('lossPercent').addEventListener('input',updateStakes);
+document.getElementById('addLegBtn').addEventListener('click',()=>{
+  const names=['H','X','A','4','5','6'];
+  legs.push({label:names[legs.length]||String(legs.length+1),book:'',odds:'2.00',kl:false});
+  buildUI();
+});
+
+// ── Modal helpers ──
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('[data-close]').forEach(btn=>{
+  btn.addEventListener('click',()=>closeModal(btn.dataset.close));
+});
+document.querySelectorAll('.modal-overlay').forEach(ov=>{
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');});
+});
+
+// ── Record modal ──
+document.getElementById('btnRecord').addEventListener('click',()=>{
+  if(!lastCalc) return;
+  selectedWinner=null;
+  const grid=document.getElementById('winnerGrid');
+  grid.innerHTML='';
+  legs.forEach((leg,i)=>{
+    const btn=document.createElement('button');
+    btn.className='winner-btn';
+    btn.dataset.i=i;
+    btn.innerHTML=`${leg.label} <span style="color:var(--text2);font-size:11px">${leg.book||''}</span><span class="wb-odds">${parseOdds(leg.odds).toFixed(2)}</span>`;
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.winner-btn').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedWinner=i;
+    });
+    grid.appendChild(btn);
+  });
+  openModal('modalRecord');
+});
+
+document.getElementById('btnSubmitRecord').addEventListener('click',async()=>{
+  if(selectedWinner===null){showToast('Επέλεξε νικητή','err');return;}
+  if(!lastCalc){showToast('Κάνε πρώτα υπολογισμό','err');return;}
+  const i=selectedWinner;
+  const leg=legs[i];
+  const market=document.getElementById('market').options[document.getElementById('market').selectedIndex].text;
+  const payload={
+    type:'bet',
+    timestamp:new Date().toISOString(),
+    match:document.getElementById('recMatch').value||'—',
+    market,
+    totalStake:Math.round(lastCalc.totalSt*100)/100,
+    winner:leg.label,
+    odds:parseOdds(leg.odds),
+    netPL:Math.round(lastCalc.netArr[i]*100)/100,
+    betType:leg.kl?`εν γνώσει -${Math.round(lastCalc.lp*100)}%`:'αυτόματο',
+    note:document.getElementById('recNote').value
+  };
+  await submitToSheet(payload,'modalRecord','btnSubmitRecord');
+});
+
+// ── Movement modal ──
+[document.getElementById('btnMovement'),document.getElementById('btnMovementAlways')].forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    movType='dep';
+    document.getElementById('movDep').classList.add('sel');
+    document.getElementById('movWit').classList.remove('sel');
+    document.getElementById('movAmount').value='';
+    document.getElementById('movNote').value='';
+    openModal('modalMovement');
+  });
+});
+document.getElementById('movDep').addEventListener('click',()=>{
+  movType='dep';
+  document.getElementById('movDep').classList.add('sel');
+  document.getElementById('movWit').classList.remove('sel');
+});
+document.getElementById('movWit').addEventListener('click',()=>{
+  movType='wit';
+  document.getElementById('movWit').classList.add('sel');
+  document.getElementById('movDep').classList.remove('sel');
+});
+
+document.getElementById('btnSubmitMovement').addEventListener('click',async()=>{
+  const amt=parseFloat(document.getElementById('movAmount').value);
+  if(!amt||amt<=0){showToast('Βάλε ποσό','err');return;}
+  const payload={
+    type:'movement',
+    timestamp:new Date().toISOString(),
+    movType:movType==='dep'?'Κατάθεση':'Ανάληψη',
+    amount:movType==='dep'?amt:-amt,
+    note:document.getElementById('movNote').value
+  };
+  await submitToSheet(payload,'modalMovement','btnSubmitMovement');
+});
+
+// ── Sheet submit via POST with CORS headers ──
+async function submitToSheet(payload, modalId, btnId) {
+  const btn = document.getElementById(btnId);
+  btn.disabled = true; btn.textContent = 'Αποστολή...';
+
+  const done = (ok) => {
+    showToast('✓ Αποθηκεύτηκε στο Sheet!', 'ok');
+    closeModal(modalId);
+    btn.disabled = false; btn.textContent = 'Αποθήκευση στο Sheet';
+  };
+
+  try {
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    done(true);
+  } catch(e) {
+    // Fallback GET via Image
+    const url = SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify(payload));
+    const img = new Image();
+    img.onload = img.onerror = () => done(true);
+    img.src = url;
+    setTimeout(() => done(true), 4000);
+  }
+}
+
+// ── Toast ──
+function showToast(msg,type='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className=`toast ${type} show`;
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+buildUI();
+</script>
+</div>
+</body>
+</html>
