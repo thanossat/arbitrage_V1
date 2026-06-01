@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Dutch Calculator</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --bg2: #1a1a1a;
+    --bg3: #222;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.15);
+    --text: #f0f0f0;
+    --text2: #999;
+    --text3: #555;
+    --green: #4ade80;
+    --green-bg: rgba(74,222,128,0.1);
+    --red: #f87171;
+    --red-bg: rgba(248,113,113,0.1);
+    --amber: #fbbf24;
+    --amber-bg: rgba(251,191,36,0.1);
+    --blue: #60a5fa;
+    --blue-bg: rgba(96,165,250,0.1);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    min-height: 100vh;
+    padding-bottom: 2rem;
+  }
+  .tg-light body { background: #e5e5ea; }
+  .page-wrap {
+    max-width: 480px;
+    margin: 0 auto;
+    background: var(--bg);
+    min-height: 100vh;
+  }
+  .tg-light {
+    --bg: #f5f5f5;
+    --bg2: #ffffff;
+    --bg3: #ebebeb;
+    --border: rgba(0,0,0,0.08);
+    --border2: rgba(0,0,0,0.15);
+    --text: #1a1a1a;
+    --text2: #666;
+    --text3: #aaa;
+    --green-bg: rgba(34,197,94,0.1);
+    --red-bg: rgba(239,68,68,0.1);
+    --amber-bg: rgba(245,158,11,0.1);
+    --blue-bg: rgba(59,130,246,0.1);
+  }
+  header {
+    padding: 1rem 1rem 0.75rem;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+    max-width: 480px;
+  }
+  .logo {
+    width: 32px; height: 32px;
+    background: var(--blue-bg);
+    border: 0.5px solid var(--border2);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  header h1 { font-size: 16px; font-weight: 600; }
+  header .sub { font-size: 12px; color: var(--text2); }
+  .content { padding: 0.75rem 1rem; }
+  .card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.875rem 1rem;
+    margin-bottom: 0.625rem;
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text2);
+    margin-bottom: 0.75rem;
+  }
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0.5rem;
+  }
+  .field-row:last-child { margin-bottom: 0; }
+  .field-row label {
+    font-size: 13px;
+    color: var(--text2);
+    min-width: 110px;
+    flex-shrink: 0;
+  }
+  input[type=number], input[type=text], select {
+    background: var(--bg3);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+  input[type=number]:focus, input[type=text]:focus, select:focus {
+    border-color: var(--blue);
+  }
+  select { width: 100%; }
+  .setup-inputs { display: flex; gap: 8px; align-items: center; }
+  .setup-inputs input { width: 80px; }
+  .setup-inputs .unit { font-size: 12px; color: var(--text2); }
+  .loss-pct-input { width: 60px; }
+
+  .legs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 80px;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .legs-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 80px;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .legs-header span {
+    font-size: 11px;
+    color: var(--text3);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0 2px;
+  }
+  .leg-row {
+    display: contents;
+  }
+  .leg-row input { width: 100%; }
+  .odds-cell { display: flex; gap: 4px; align-items: center; }
+  .odds-cell input { flex: 1; min-width: 0; }
+  .rm-btn {
+    background: none;
+    border: none;
+    color: var(--text3);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .rm-btn:active { color: var(--red); }
+
+  .kl-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-top: 0.5px solid var(--border);
+    margin-top: 6px;
+  }
+  .kl-toggle-row:first-of-type { margin-top: 8px; }
+  .kl-label { font-size: 13px; color: var(--text); }
+  .kl-sub { font-size: 11px; color: var(--text2); margin-top: 1px; }
+  .kl-stake { font-size: 13px; font-weight: 600; color: var(--amber); }
+  .toggle-switch {
+    position: relative;
+    width: 40px; height: 22px;
+    flex-shrink: 0;
+    margin-left: 10px;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-track {
+    position: absolute; inset: 0;
+    background: var(--bg3);
+    border: 0.5px solid var(--border2);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle-track::after {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    background: var(--text2);
+    border-radius: 50%;
+    top: 2px; left: 2px;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .toggle-switch input:checked + .toggle-track { background: var(--amber-bg); border-color: var(--amber); }
+  .toggle-switch input:checked + .toggle-track::after { transform: translateX(18px); background: var(--amber); }
+
+  .add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px;
+    background: var(--bg3);
+    border: 0.5px dashed var(--border2);
+    border-radius: var(--radius-sm);
+    color: var(--text2);
+    font-size: 13px;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  .add-btn:active { background: var(--bg2); }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 0.625rem;
+  }
+  .metric-card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+  }
+  .metric-card .mlabel { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+  .metric-card .mvalue { font-size: 22px; font-weight: 600; }
+  .metric-card.green { border-color: rgba(74,222,128,0.3); background: var(--green-bg); }
+  .metric-card.green .mvalue { color: var(--green); }
+  .metric-card.red { border-color: rgba(248,113,113,0.3); background: var(--red-bg); }
+  .metric-card.red .mvalue { color: var(--red); }
+  .metric-card.amber { border-color: rgba(251,191,36,0.3); background: var(--amber-bg); }
+  .metric-card.amber .mvalue { color: var(--amber); }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 0.625rem;
+  }
+  .status-badge.arb { background: var(--green-bg); color: var(--green); border: 0.5px solid rgba(74,222,128,0.3); }
+  .status-badge.partial { background: var(--amber-bg); color: var(--amber); border: 0.5px solid rgba(251,191,36,0.3); }
+  .status-badge.noarb { background: var(--red-bg); color: var(--red); border: 0.5px solid rgba(248,113,113,0.3); }
+  .status-icon { font-size: 16px; }
+
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .results-table th {
+    text-align: left;
+    color: var(--text3);
+    font-weight: 500;
+    padding: 4px 6px;
+    border-bottom: 0.5px solid var(--border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .results-table td {
+    padding: 8px 6px;
+    border-bottom: 0.5px solid var(--border);
+    vertical-align: middle;
+  }
+  .results-table tr:last-child td { border-bottom: none; }
+  .net-pos { color: var(--green); font-weight: 600; }
+  .net-neg { color: var(--red); }
+  .net-warn { color: var(--amber); font-weight: 600; }
+  .type-pill {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .type-auto { background: var(--bg3); color: var(--text2); }
+  .type-kl { background: var(--amber-bg); color: var(--amber); }
+
+  .footnote {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+<header>
+  <div class="logo">⚡</div>
+  <div>
+    <h1>Dutch Calculator</h1>
+    <div class="sub">Arbitrage &amp; dutching</div>
+  </div>
+</header>
+
+<div class="content">
+
+  <div class="card">
+    <div class="card-title">Setup</div>
+    <div class="field-row">
+      <label>Αγορά</label>
+      <select id="market">
+        <option value="3">1X2 (3 αποτελέσματα)</option>
+        <option value="2">H2H (2 αποτελέσματα)</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <label>Συνολικό ποντάρισμα</label>
+      <div class="setup-inputs">
+        <span class="unit">€</span>
+        <input type="number" id="totalStake" value="50" min="1" step="1">
+      </div>
+    </div>
+    <div class="field-row">
+      <label>% γνωστής απώλειας</label>
+      <div class="setup-inputs">
+        <input type="number" id="lossPercent" value="20" min="1" max="99" step="1" class="loss-pct-input">
+        <span class="unit">%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Αποτελέσματα & αποδόσεις</div>
+    <div class="legs-header">
+      <span>Αποτέλεσμα / Book</span>
+      <span>Απόδοση</span>
+      <span>Ποντάρισμα</span>
+    </div>
+    <div id="legsContainer"></div>
+    <button class="add-btn" id="addLegBtn">+ Προσθήκη αποτελέσματος</button>
+    <div id="klToggles"></div>
+  </div>
+
+  <div id="metricsArea" style="display:none">
+    <div class="metrics" id="metricsGrid"></div>
+    <div id="statusBadge"></div>
+    <div class="card">
+      <div class="card-title">Ανάλυση</div>
+      <table class="results-table" id="resultsTable"></table>
+      <p class="footnote" id="footnote"></p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  if (tg.colorScheme === 'light') document.body.classList.add('tg-light');
+}
+
+const D3 = [
+  {label:'Home (H)', book:'Stoiximan', odds:'2.10', kl:false},
+  {label:'Draw (X)', book:'Novibet',   odds:'3.40', kl:false},
+  {label:'Away (A)', book:'Betsson',   odds:'3.60', kl:false},
+];
+const D2 = [
+  {label:'Home', book:'Stoiximan', odds:'1.90', kl:false},
+  {label:'Away', book:'Novibet',   odds:'2.05', kl:false},
+];
+
+let legs = JSON.parse(JSON.stringify(D3));
+
+const getTotal   = () => parseFloat(document.getElementById('totalStake').value) || 0;
+const getLossPct = () => (parseFloat(document.getElementById('lossPercent').value) || 20) / 100;
+const parseOdds  = s  => parseFloat((s||'').replace(',','.')) || 0;
+const klStake    = (odds, total, lp) => (total * (1 - lp)) / odds;
+
+function buildUI() {
+  const container = document.getElementById('legsContainer');
+  const klDiv     = document.getElementById('klToggles');
+  container.innerHTML = '';
+  klDiv.innerHTML = '';
+
+  legs.forEach((leg, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 80px;gap:6px;align-items:center;margin-bottom:6px';
+    row.dataset.i = i;
+
+    const left = document.createElement('div');
+    left.style.cssText = 'display:flex;flex-direction:column;gap:4px';
+
+    const inLabel = document.createElement('input');
+    inLabel.type = 'text'; inLabel.value = leg.label;
+    inLabel.placeholder = 'Αποτέλεσμα';
+    inLabel.style.cssText = 'width:100%;font-size:13px;background:var(--bg3);border:0.5px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;outline:none';
+    inLabel.dataset.field = 'label'; inLabel.dataset.i = i;
+
+    const inBook = document.createElement('input');
+    inBook.type = 'text'; inBook.value = leg.book;
+    inBook.placeholder = 'Bookmaker';
+    inBook.style.cssText = 'width:100%;font-size:12px;background:var(--bg3);border:0.5px solid var(--border);border-radius:6px;color:var(--text2);padding:5px 8px;outline:none';
+    inBook.dataset.field = 'book'; inBook.dataset.i = i;
+
+    left.append(inLabel, inBook);
+
+    const inOdds = document.createElement('input');
+    inOdds.type = 'text'; inOdds.inputMode = 'decimal'; inOdds.value = leg.odds;
+    inOdds.placeholder = '1.00';
+    inOdds.style.cssText = 'width:100%;font-size:15px;font-weight:600;background:var(--bg3);border:0.5px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;outline:none;text-align:center';
+    inOdds.dataset.field = 'odds'; inOdds.dataset.i = i;
+
+    const stakeCell = document.createElement('div');
+    stakeCell.dataset.stakeDisplay = i;
+    stakeCell.style.cssText = 'text-align:right;font-size:13px;font-weight:600;padding-right:4px';
+    stakeCell.style.color = 'var(--text2)';
+    stakeCell.textContent = 'auto';
+
+    row.append(left, inOdds, stakeCell);
+    container.appendChild(row);
+
+    const klRow = document.createElement('div');
+    klRow.className = 'kl-toggle-row';
+    klRow.innerHTML = `
+      <div>
+        <div class="kl-label">${leg.label}</div>
+        <div class="kl-sub">εν γνώσει -<span class="kl-pct">${Math.round(getLossPct()*100)}</span>% αν κερδίσει</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="kl-stake" data-kl-stake="${i}" style="display:none"></span>
+        <label class="toggle-switch">
+          <input type="checkbox" data-kl="${i}" ${leg.kl?'checked':''}>
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+    `;
+    klDiv.appendChild(klRow);
+  });
+
+  updateStakes();
+}
+
+function updateStakes() {
+  const total = getTotal();
+  const lp    = getLossPct();
+
+  const oddsArr    = legs.map(l => parseOdds(l.odds));
+  const impliedArr = oddsArr.map(o => o > 1 ? 1/o : 0);
+  const fixedArr   = legs.map((l,i) => l.kl && oddsArr[i]>1 ? klStake(oddsArr[i], total, lp) : null);
+  const fixedSum   = fixedArr.reduce((a,v) => a + (v!==null?v:0), 0);
+  const freeImpl   = impliedArr.reduce((a,v,i) => a + (fixedArr[i]===null?v:0), 0);
+  const freeTotal  = Math.max(0, total - fixedSum);
+  const stakesArr  = fixedArr.map((v,i) => v !== null ? v : (freeImpl>0 ? (impliedArr[i]/freeImpl)*freeTotal : 0));
+
+  legs.forEach((leg, i) => {
+    const cell = document.querySelector(`[data-stake-display="${i}"]`);
+    const klSp = document.querySelector(`[data-kl-stake="${i}"]`);
+    if (!cell) return;
+    if (leg.kl && fixedArr[i] !== null) {
+      cell.style.color = 'var(--amber)';
+      cell.textContent = '€' + fixedArr[i].toFixed(2);
+      if (klSp) { klSp.textContent = '€' + fixedArr[i].toFixed(2); klSp.style.display = ''; }
+    } else {
+      cell.style.color = 'var(--text2)';
+      cell.textContent = oddsArr.every(o=>o>1) ? '€'+stakesArr[i].toFixed(2) : 'auto';
+      if (klSp) klSp.style.display = 'none';
+    }
+  });
+
+  document.querySelectorAll('.kl-pct').forEach(el => el.textContent = Math.round(lp*100));
+  calcResults(oddsArr, impliedArr, fixedArr, stakesArr, total, lp);
+}
+
+function calcResults(oddsArr, impliedArr, fixedArr, stakesArr, total, lp) {
+  const metricsArea = document.getElementById('metricsArea');
+  if (!oddsArr.every(o=>o>1) || total<=0) { metricsArea.style.display='none'; return; }
+
+  const sumImpl    = impliedArr.reduce((a,b)=>a+b,0);
+  const totalSt    = stakesArr.reduce((a,b)=>a+b,0);
+  const returnsArr = stakesArr.map((s,i) => s*oddsArr[i]);
+  const netArr     = returnsArr.map(r => r - totalSt);
+  const minNet     = Math.min(...netArr);
+  const maxNet     = Math.max(...netArr);
+  const isArb      = minNet > -0.01;
+  const klCount    = legs.filter(l=>l.kl).length;
+
+  metricsArea.style.display = '';
+
+  document.getElementById('metricsGrid').innerHTML = `
+    <div class="metric-card">
+      <div class="mlabel">Implied συνολικά</div>
+      <div class="mvalue" style="font-size:20px">${(sumImpl*100).toFixed(2)}%</div>
+    </div>
+    <div class="metric-card">
+      <div class="mlabel">Margin book</div>
+      <div class="mvalue" style="font-size:20px">${((sumImpl-1)*100).toFixed(2)}%</div>
+    </div>
+    <div class="metric-card ${maxNet>=-0.01?'green':'red'}">
+      <div class="mlabel">Καλύτερο</div>
+      <div class="mvalue">${maxNet>=0?'+':''}€${maxNet.toFixed(2)}</div>
+    </div>
+    <div class="metric-card ${minNet>=-0.01?'green':klCount>0?'amber':'red'}">
+      <div class="mlabel">Χειρότερο</div>
+      <div class="mvalue">${minNet>=0?'+':''}€${minNet.toFixed(2)}</div>
+    </div>
+  `;
+
+  const badge = document.getElementById('statusBadge');
+  if (isArb) {
+    badge.innerHTML = '<div class="status-badge arb"><span class="status-icon">✓</span> Arb — κέρδος εγγυημένο ανεξαρτήτως αποτελέσματος</div>';
+  } else if (klCount > 0) {
+    badge.innerHTML = `<div class="status-badge partial"><span class="status-icon">⚡</span> Ελεγχόμενη έκθεση — ${klCount} σημείο${klCount>1?'α':''} σε γνωστή απώλεια</div>`;
+  } else {
+    badge.innerHTML = '<div class="status-badge noarb"><span class="status-icon">✕</span> Χωρίς arb — implied > 100%</div>';
+  }
+
+  let html = `<thead><tr>
+    <th>Αποτέλεσμα</th><th>Απόδ.</th><th>Ποντ.</th><th>Net P/L</th><th>Τύπος</th>
+  </tr></thead><tbody>`;
+  legs.forEach((leg,i) => {
+    const net = netArr[i];
+    const isKL = leg.kl;
+    const nc = isKL ? 'net-warn' : net>=-0.01 ? 'net-pos' : 'net-neg';
+    const pill = isKL
+      ? `<span class="type-pill type-kl">-${Math.round(lp*100)}%</span>`
+      : `<span class="type-pill type-auto">auto</span>`;
+    html += `<tr>
+      <td><div style="font-weight:500">${leg.label}</div><div style="font-size:11px;color:var(--text2)">${leg.book||'—'}</div></td>
+      <td style="font-weight:600">${oddsArr[i].toFixed(2)}</td>
+      <td style="font-weight:600">€${stakesArr[i].toFixed(2)}</td>
+      <td class="${nc}">${net>=0?'+':''}€${net.toFixed(2)}</td>
+      <td>${pill}</td>
+    </tr>`;
+  });
+  html += '</tbody>';
+  document.getElementById('resultsTable').innerHTML = html;
+
+  const books = [...new Set(legs.map(l=>l.book).filter(Boolean))];
+  const isMulti = books.length >= 2;
+  document.getElementById('footnote').textContent = isArb
+    ? (isMulti ? `Multi-book dutch μεταξύ ${books.join(', ')}.` : 'Προσοχή: ίδιο book παντού.')
+    : klCount > 0
+    ? `Τα σημεία "εν γνώσει" δεσμεύουν ποντάρισμα ώστε η ζημιά να είναι ακριβώς -${Math.round(lp*100)}% (€${(total*lp).toFixed(2)}) αν κερδίσουν.`
+    : 'Δεν υπάρχει arb. Δοκίμασε καλύτερες αποδόσεις σε διαφορετικά books.';
+}
+
+document.getElementById('legsContainer').addEventListener('input', e => {
+  const el = e.target;
+  const i  = parseInt(el.dataset.i);
+  const f  = el.dataset.field;
+  if (f !== undefined) legs[i][f] = el.value;
+  updateStakes();
+});
+
+document.getElementById('klToggles').addEventListener('change', e => {
+  const el = e.target;
+  const i  = parseInt(el.dataset.kl);
+  if (i !== undefined && !isNaN(i)) {
+    legs[i].kl = el.checked;
+    updateStakes();
+  }
+});
+
+document.getElementById('market').addEventListener('change', () => {
+  const v = document.getElementById('market').value;
+  legs = JSON.parse(JSON.stringify(v==='2' ? D2 : D3));
+  buildUI();
+});
+
+document.getElementById('totalStake').addEventListener('input', updateStakes);
+document.getElementById('lossPercent').addEventListener('input', updateStakes);
+
+document.getElementById('addLegBtn').addEventListener('click', () => {
+  const names = ['H','X','A','4','5','6'];
+  legs.push({label: names[legs.length] || String(legs.length+1), book:'', odds:'2.00', kl:false});
+  buildUI();
+});
+
+buildUI();
+</script>
+</div>
+</body>
+</html>
