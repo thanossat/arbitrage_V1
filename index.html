@@ -104,8 +104,8 @@
     <h2>📋 Ενημέρωση Google Sheet</h2>
     
     <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('bet')">📋 Στοίχημα</button>
-        <button class="tab-btn" onclick="switchTab('movement')">💰 Κίνηση Ταμείου</button>
+        <button type="button" class="tab-btn active" onclick="switchTab('bet')">📋 Στοίχημα</button>
+        <button type="button" class="tab-btn" onclick="switchTab('movement')">💰 Κίνηση Ταμείου</button>
     </div>
 
     <form id="dataForm">
@@ -174,17 +174,15 @@
 </div>
 
 <script>
-    // ⚠️ ΠΡΟΣΟΧΗ: Βάλε εδώ το δικό σου Web App URL που αντέγραψες από το Google Apps Script!
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzYbAJQpO8fGsXwztTljgCuSIARFdgl33eyRtgK8o3-VroHLE5Rn7FnbGnxJqSPi7Uecg/exec";
+    // ⚠️ ΕΛΕΓΞΕ ΑΝ ΑΥΤΟ ΕΙΝΑΙ ΤΟ ΝΕΟ URL ΠΟΥ ΠΗΡΕΣ ΑΠΟ ΤΟ ΒΗΜΑ 1
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwRArzLtnofpd94AGljojtkKnU38dShAG21vOojvpLz4ETntrtEZef1-zI3Mjx_DlFz/exec";
 
-    // Βάζει αυτόματα την τρέχουσα ημερομηνία και ώρα στο input
     window.onload = function() {
         const now = new Date();
         now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
         document.getElementById('timestamp').value = now.toISOString().slice(0,16);
     };
 
-    // Εναλλαγή καρτελών (Tabs)
     function switchTab(type) {
         document.getElementById('dataType').value = type;
         const betFields = document.getElementById('betFields');
@@ -204,17 +202,11 @@
         }
     }
 
-    // Διαχείριση της υποβολής της φόρμας
     document.getElementById('dataForm').addEventListener('submit', function(e) {
         e.preventDefault();
         
         const msgDiv = document.getElementById('message');
         msgDiv.style.display = 'none';
-        
-        if (WEB_APP_URL === "ΕΔΩ_ΒΑΖΕΙΣ_ΤΟ_URL_ΣΟΥ" || !WEB_APP_URL) {
-            showFormMessage("Σφάλμα: Δεν έχεις ορίσει το WEB_APP_URL στον κώδικα!", "error");
-            return;
-        }
 
         const type = document.getElementById('dataType').value;
         let payload = {
@@ -223,7 +215,6 @@
             note: document.getElementById('note').value
         };
 
-        // Συλλογή δεδομένων ανάλογα με το tab
         if (type === 'bet') {
             payload.match = document.getElementById('match').value;
             payload.market = document.getElementById('market').value;
@@ -235,23 +226,24 @@
         } else {
             payload.movType = document.getElementById('movType').value;
             let amt = parseFloat(document.getElementById('amount').value) || 0;
-            // Αν είναι ανάληψη, αποθηκεύεται ως αρνητικό ποσό αυτόματα
             if (payload.movType === "Ανάληψη" && amt > 0) amt = -amt;
             payload.amount = amt;
         }
 
         showFormMessage("Αποστολή δεδομένων...", "success");
 
-        // Αποστολή στο Google Apps Script (χρησιμοποιώντας POST)
+        // ΑΝΑΓΚΑΣΤΙΚΗ ΑΠΟΣΤΟΛΗ ΜΕ ΜΕΘΟΔΟ POST
         fetch(WEB_APP_URL, {
             method: 'POST',
-            mode: 'no-cors', // Απαραίτητο για το Google Apps Script Web App bypass CORS
-            headers: { 'Content-Type': 'application/json' },
+            mode: 'no-cors', 
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify(payload)
         })
         .then(() => {
             showFormMessage("Η καταχώρηση έγινε επιτυχώς!", "success");
-            // Καθαρισμός φορμών (εκτός της ώρας)
+            // Καθαρισμός
             document.getElementById('match').value = '';
             document.getElementById('market').value = '';
             document.getElementById('totalStake').value = '';
